@@ -1,6 +1,9 @@
 import random
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
+import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 @dataclass
 class MontyHallSimulationInputs:
@@ -19,13 +22,32 @@ class MontyHallSimulation:
     inputs: MontyHallSimulationInputs
     outputs: MontyHallSimulationOutputs
 
+    @property
+    def switch_win_percentage(self) -> float:
+        return (self.outputs.switch_wins / self.inputs.num_simulations) * 100
+
+    @property
+    def switch_lose_percentage(self) -> float:
+        return (self.outputs.switch_loses / self.inputs.num_simulations) * 100
+
+    @property
+    def stay_win_percentage(self) -> float:
+        return (self.outputs.stay_wins / self.inputs.num_simulations) * 100
+
+    @property
+    def stay_lose_percentage(self) -> float:
+        return (self.outputs.stay_loses / self.inputs.num_simulations) * 100
+
     def __str__(self):
         return (
             f"Numero di porte: {self.inputs.num_doors}; Simulazioni: {self.inputs.num_simulations}\n"
-            f"    Vittorie mantenendo la scelta iniziale: {self.outputs.stay_wins} ({(self.outputs.stay_wins / self.inputs.num_simulations) * 100:.2f}%)\n"
-            f"    Sconfitte mantenendo la scelta iniziale: {self.outputs.stay_loses} ({(self.outputs.stay_loses / self.inputs.num_simulations) * 100:.2f}%)\n"
-            f"    Vittorie cambiando la scelta iniziale: {self.outputs.switch_wins} ({(self.outputs.switch_wins / self.inputs.num_simulations) * 100:.2f}%)\n"
-            f"    Sconfitte cambiando la scelta iniziale: {self.outputs.switch_loses} ({(self.outputs.switch_loses / self.inputs.num_simulations) * 100:.2f}%)\n"
+            "   Cambio:\n"
+            f"      Vittorie: {self.outputs.switch_wins} ({self.switch_win_percentage:.2f}%)\n"
+            f"      Sconfitte: {self.outputs.switch_loses} ({self.switch_lose_percentage:.2f}%)\n"
+            "   Tengo:\n"
+            f"      Vittorie se tengo: {self.outputs.stay_wins} ({self.stay_win_percentage:.2f}%)\n"
+            f"      Sconfitte se tengo: {self.outputs.stay_loses} ({self.stay_lose_percentage:.2f}%)\n"
+            f"   Vantaggio di cambaire rispetto a tenere: {self.switch_win_percentage - self.stay_win_percentage:.2f}%"
         )
 
 def monty_hall_simulation(
@@ -83,7 +105,12 @@ def monty_hall_simulation(
         )
     )
 
-def plot_simulations(num_simulations: int, doors_start: int, doors_end: int):
+def plot_simulations(
+    num_simulations: int,
+    doors_start: int,
+    doors_end: int,
+    logs: bool=False
+):
     """
     Show a plot built as follows:
     - x axis: number of doors simulated
@@ -97,18 +124,50 @@ def plot_simulations(num_simulations: int, doors_start: int, doors_end: int):
     x_doors = []
     y_stay_win_percentage = []
     y_switch_win_percentage = []
-    epsilon = 0.1
+    y_switch_advantage = []
+
+    if not logs:
+        logger.setLevel(logging.CRITICAL + 1)
+
     for doors in range(doors_start, doors_end + 1, 1):
         result = monty_hall_simulation(num_simulations=num_simulations, num_doors=doors)
+        logger.info(str(result) + "\n")
         x_doors.append(doors)
-        y_stay_win_percentage.append(result.outputs.stay_wins / result.inputs.num_simulations * 100)
-        y_switch_win_percentage.append(result.outputs.switch_wins / result.inputs.num_simulations * 100)
+        y_stay_win_percentage.append(result.stay_win_percentage)
+        y_switch_win_percentage.append(result.switch_win_percentage)
+        y_switch_advantage.append(
+            result.switch_win_percentage - result.stay_win_percentage
+        )
 
     ax.plot(x_doors, y_stay_win_percentage, label="% wins by staying")
     ax.plot(x_doors, y_switch_win_percentage, label="% wins by switching")
+    ax.plot(x_doors, y_switch_advantage, label="% advantage by switching")
+
+    # Add a vertical line where y_switch_advantage is lower than epsilon
+    epsilon = 0.01
+    for i, advantage in enumerate(y_switch_advantage):
+        if advantage < epsilon:
+            ax.axvline(
+                x=x_doors[i], color="red",
+                linestyle="--", label=f"Switching advantage < {epsilon}"
+            )
+            ax.text(x_doors[i], 50, f"{x_doors[i]}")
+            logger.info(
+                f"Switching advantage < {epsilon} for the first time "
+                f"with {x_doors[i]} doors ({y_switch_advantage[i]:.2f}%)"
+            )
+            break
+
     ax.legend()
-    plt.show(block=False)
+    plt.show()
 
 
 if __name__ == "__main__":
-    plot_simulations(num_simulations=10000, doors_start=3, doors_end=20)
+    logger.info("Running...")
+    plot_simulations(
+        num_simulations=10000,
+        doors_start=3,
+        doors_end=100,
+        logs=True,
+    )
+    logger.info("End.")
